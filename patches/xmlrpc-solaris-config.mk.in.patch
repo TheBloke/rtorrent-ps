@@ -1,0 +1,19 @@
+--- a/config.mk.in	2018-09-01 22:59:34.218501334 +0000
++++ b/config.mk.in	2018-09-01 23:45:15.832334521 +0000
+@@ -193,10 +193,12 @@
+   # linker, it's even more complicated: we need an rpath option of the
+   # form -Wl,-R .
+ 
+-  # Solaris compiler (Sun C 5.5) can't take multiple ld options as
+-  # -Wl,-a,-b .  Ld sees -a,-b in that case.
+-  LDFLAGS_SHLIB = -Wl,-Bdynamic -Wl,-G -Wl,-h -Wl,$(SONAME)
+-  CFLAGS_SHLIB = -Kpic
++  # We are compiling with GCC and GCC linker not Sun Studio
++  # so copy options from Linux/GNU above
++  #LDFLAGS_SHLIB = -Wl,-Bdynamic -Wl,-G -Wl,-h -Wl,$(SONAME)
++  #CFLAGS_SHLIB = -Kpic
++  LDFLAGS_SHLIB = -shared -Wl,-soname,$(SONAME) $(SHLIB_CLIB)
++  CFLAGS_SHLIB=-fPIC
+   NEED_RPATH=yes
+ endif
+ 

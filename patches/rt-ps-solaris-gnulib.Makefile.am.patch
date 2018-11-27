@@ -1,0 +1,14 @@
+--- a/Makefile.am	2018-09-02 01:25:21.374499145 +0000
++++ b/Makefile.am	2018-09-02 01:25:26.436608641 +0000
+@@ -1,9 +1,11 @@
+ SUBDIRS = \
+ 	doc \
+ 	src \
++	gnulib \
+ 	test
+ 
+ EXTRA_DIST= \
++	scripts/gnulib-cache.m4 \
+ 	autogen.sh \
+ 	rak/address_info.h \
+ 	rak/algorithm.h \

@@ -1,0 +1,25 @@
+--- a/configure.ac	2018-09-02 03:02:16.681621508 +0000
++++ b/configure.ac	2018-09-02 03:02:42.868999282 +0000
+@@ -3,10 +3,12 @@
+ AC_DEFINE(API_VERSION, 9, api version)
+ 
+ AM_INIT_AUTOMAKE
+ AC_CONFIG_HEADERS(config.h)
++AC_CONFIG_FILES(gnulib/Makefile)
+ 
+ AC_PROG_CXX
++gl_INIT
+ AC_PROG_LIBTOOL
+ 
+ TORRENT_CHECK_CXXFLAGS()
+ TORRENT_ENABLE_DEBUG()
+@@ -30,8 +32,9 @@
+ TORRENT_WITHOUT_STATFS()
+ 
+ AX_PTHREAD([], AC_MSG_ERROR([requires pthread]))
+ AX_WITH_CURSES()
++gl_EARLY
+ 
+ if test "x$ax_cv_ncursesw" != xyes && test "x$ax_cv_ncurses" != xyes; then
+    AC_MSG_ERROR([requires either NcursesW or Ncurses library])
+ fi

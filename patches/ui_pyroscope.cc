@@ -176,14 +176,14 @@ int64_t parse_value_arg(const torrent::Object& arg) {
 
 // convert absolute timestamp to approximate human readable time diff (5 chars wide)
 std::string elapsed_time(unsigned long dt, unsigned long t0) {
-    if (dt == 0) return std::string("⋆ ⋆⋆ ");
+    if (dt == 0) return std::string(". .. ");
 
-    const char* unit[] = {"”", "’", "h", "d", "w", "m", "y"};
+    const char* unit[] = {"\"", "'", "h", "d", "w", "m", "y"};
     unsigned long threshold[] = {1, 60, 3600, 86400, 7*86400, 30*86400, 365*86400, 0};
 
     int dim = 0;
     dt = std::labs((t0 ? t0 : time(NULL)) - dt);
-    if (dt == 0) return std::string("⋅ ⋅⋅ ");
+    if (dt == 0) return std::string(". .. ");
     while (threshold[dim] && dt >= threshold[dim]) ++dim;
     if (dim) --dim;
     float val = float(dt) / float(threshold[dim]);
@@ -201,8 +201,8 @@ std::string elapsed_time(unsigned long dt, unsigned long t0) {
 
 // return 2-digits number, or digit + dimension indicator
 std::string num2(int64_t num) {
-    if (num < 0 || 10*1000*1000 <= num) return std::string("♯♯");
-    if (!num) return std::string(" ⋅");
+    if (num < 0 || 10*1000*1000 <= num) return std::string("^^");
+    if (!num) return std::string(" .");
 
     char buffer[10];
     if (num < 100) {
@@ -822,7 +822,7 @@ bool ui_pyroscope_download_list_redraw(Window* window, display::Canvas* canvas, 
     std::transform(find_term.begin(), find_term.end(), find_term.begin(), ::tolower);
 
     // Render header line
-    canvas->print(0, pos, "⇳ ");
+    canvas->print(0, pos, "  ");
     int custom_width = render_columns(true, narrow, rpc::make_target(), 0, canvas, column, pos, 0, column_defs);
     if (custom_width < 0) { // enter narrow mode
         canvas->print(x_base, pos, "%s", std::string(canvas->width() - x_base, ' ').c_str()); // clean slate

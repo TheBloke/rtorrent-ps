@@ -1,0 +1,14 @@
+--- a/src/input/path_input.cc	2018-09-02 00:02:57.158033620 +0000
++++ b/src/input/path_input.cc	2018-09-02 00:04:45.372433270 +0000
+@@ -75,7 +75,11 @@
+ 
+ struct _transform_filename {
+   void operator () (utils::directory_entry& entry) {
++#ifdef __sun__
++    if (entry.d_type & S_IFDIR)
++#else
+     if (entry.d_type == DT_DIR)
++#endif
+       entry.d_name += '/';
+   }
+ };

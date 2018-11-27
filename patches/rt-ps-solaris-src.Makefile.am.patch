@@ -1,0 +1,20 @@
+--- a/src/Makefile.am	2018-09-02 03:10:58.000457947 +0000
++++ b/src/Makefile.am	2018-09-02 03:28:22.700169478 +0000
+@@ -42,8 +42,10 @@
+ 
+ bin_PROGRAMS = rtorrent
+ 
+ rtorrent_LDADD = \
++	../gnulib/unistd.o \
++	../gnulib/random_r.o \
+ 	libsub_root.a \
+ 	ui/libsub_ui.a \
+ 	core/libsub_core.a \
+ 	display/libsub_display.a \
+@@ -54,5 +56,5 @@
+ 
+ rtorrent_SOURCES = \
+ 	main.cc
+ 
+-AM_CPPFLAGS = -I$(srcdir) -I$(top_srcdir)
++AM_CPPFLAGS = -I$(srcdir) -I$(top_srcdir) -I$(top_srcdir)/gnulib

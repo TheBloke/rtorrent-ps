@@ -39,6 +39,16 @@
 # so older versions might get regressions over time (failing patches).
 
 # Get git metadata
+
+# Solaris: ensure usage of GNU tools (sed, tar, tar, tail, etc.)
+if [[ "$(uname -s)" == "SunOS" ]];
+then
+    export PATH=/usr/gnu/bin:"$PATH"
+    export SOLARIS=1
+else
+    export SOLARIS=0
+fi
+
 if test ! -d .git -a -f docker-env; then
     . docker-env
 else
@@ -87,6 +97,7 @@ BUILD_PKG_DEPS=( libncurses5-dev libncursesw5-dev libssl-dev zlib1g-dev libcppun
 #export XMLRPC_REV=2917      # Release 1.48.00 2016-12-27
 export CARES_VERSION=1.14.0 # 2018-02
 export CURL_VERSION=7.61.0  # 2018-07
+export NCURSES_VERSION=6.1  # 2018-07
 export XMLRPC_REV=2954      # Release 1.49.02 2017-09
 
 # Extra options handling (set overridable defaults)
@@ -95,7 +106,7 @@ export XMLRPC_REV=2954      # Release 1.49.02 2017-09
 : ${INSTALL_DIR:=$INSTALL_ROOT/.local/rtorrent/$RT_VERSION-$RT_PS_REVISION}
 : ${BIN_DIR:=$INSTALL_ROOT/bin}
 : ${CURL_OPTS:=-sLS}
-: ${MAKE_OPTS:=-j4}
+: ${MAKE_OPTS:=-j6}
 : ${CFG_OPTS:=}
 : ${CFG_OPTS_LT:=}
 : ${CFG_OPTS_RT:=}
@@ -106,6 +117,12 @@ LT_PATCHES=( )
 RT_PATCHES=( )
 LT_BASE_PATCHES=( $SRC_DIR/patches/lt-base-cppunit-pkgconfig.patch )
 RT_BASE_PATCHES=( $SRC_DIR/patches/rt-base-cppunit-pkgconfig.patch )
+
+if [[ $SOLARIS ]]; then
+    LT_BASE_PATCHES+=( $SRC_DIR/patches/lt-base-solaris*.patch )
+    RT_BASE_PATCHES+=( $SRC_DIR/patches/rt-base-solaris*.patch )
+    RT_PATCHES+=( $SRC_DIR/patches/rt-ps-solaris*.patch )
+fi
 
 # Distro specifics
 case $(echo -n "$(lsb_release -sic 2>/dev/null || echo NonLSB)" | tr ' \n' '-') in
@@ -214,6 +231,13 @@ case "$(uname -s)" in
         export CPPFLAGS="-pthread${CPPFLAGS:+ }${CPPFLAGS}"
         export LIBS="-lpthread${LIBS:+ }${LIBS}"
         ;;
+    SunOS)
+        export CFLAGS="-O2 -m64 -Wno-deprecated-declarations${CFLAGS:+ }${CFLAGS}"
+        export CXXFLAGS="-Wno-terminate${CXXFLAGS:+ }${CXXFLAGS}"
+        export CPPFLAGS="-I$INSTALL_DIR/include/ncurses -I$INSTALL_DIR/include/ncursesw${CPPFLAGS:+ }${CPPFLAGS}"
+        #export CPPFLAGS="-I/usr/include/ncurses${CPPFLAGS:+ }${CPPFLAGS}"
+        #export LDFLAGS="-L/export/home/tomj/.local/rtorrent/0.9.6-PS-1.2-dev/lib${LDFLAGS:+ }${LDFLAGS}"
+        export CFG_OPTS_RT="--with-gnu-ld"
 esac
 
 # Keep rTorrent version, once it was built in this directory
@@ -227,7 +251,7 @@ BUILD_GIT=false
 
 set_build_env() {
     export CPPFLAGS="-I $INSTALL_RELEASE_DIR/include${CPPFLAGS:+ }${CPPFLAGS}"
-    export CXXFLAGS="$CFLAGS"
+    export CXXFLAGS="$CFLAGS${CXXFLAGS:+ }${CXXFLAGS}"
     export LDFLAGS="-L$INSTALL_RELEASE_DIR/lib${LDFLAGS:+ }${LDFLAGS}"
     export LDFLAGS="-Wl,-rpath,$INSTALL_RELEASE_DIR/lib ${LDFLAGS}"
     export LIBS="${LIBS}"
@@ -267,6 +291,8 @@ case $XMLRPC_REV in
         ;;
 esac
 
+ [[ $SOLARIS ]] && TARBALLS+=( "https://invisible-mirror.net/archives/ncurses/ncurses-6.1.tar.gz" )
+
 # Other sources:
 #   http://rtorrent.net/downloads/
 #   http://pkgs.fedoraproject.org/repo/pkgs/libtorrent/
@@ -292,7 +318,7 @@ pkg-config:pkg-config
 
 set -e
 set +x
-SUBDIRS="c-ares-*[0-9] curl-*[0-9] xmlrpc-c-advanced-$XMLRPC_REV libtorrent-*[0-9] rtorrent-*[0-9]"
+SUBDIRS="c-ares-*[0-9] curl-*[0-9] xmlrpc-c-advanced-$XMLRPC_REV ncurses-*[0-9] libtorrent-*[0-9] rtorrent-*[0-9]"
 ESC=$(echo -en \\0033)
 BOLD="$ESC[1m"
 OFF="$ESC[0m"
@@ -411,10 +437,10 @@ download() { ## Download and unpack sources
 }
 
 automagic() {
-    aclocal
+    aclocal -I scripts
     rm -f ltmain.sh scripts/{libtool,lt*}.m4
     $LIBTOOLIZE --automake --force --copy
-    aclocal
+    aclocal -I scripts
     autoconf
     automake --add-missing
     ./autogen.sh
@@ -424,15 +450,36 @@ build_deps() {
     # Build direct dependencies
     test -e $SRC_DIR/tarballs/DONE || fail "You need to '$0 download' first!"
 
+    bold "Installing c-ares-$CARES_VERSION"
     ( cd c-ares-$CARES_VERSION && ./configure \
         && $MAKE $MAKE_OPTS && $MAKE DESTDIR=$INSTALL_DIR prefix= install \
         || fail "Cannot build or install 'c-ares'!" )
     $SED_I s:/usr/local:$INSTALL_DIR: $INSTALL_DIR/lib/pkgconfig/*.pc $INSTALL_DIR/lib/*.la
 
+    bold "Installing curl-$CURL_VERSION"
     ( cd curl-$CURL_VERSION && ./configure --enable-ares \
         && $MAKE $MAKE_OPTS && $MAKE DESTDIR=$INSTALL_DIR prefix= install \
         || fail "Cannot build or install 'curl'!" )
     $SED_I s:/usr/local:$INSTALL_DIR: $INSTALL_DIR/lib/pkgconfig/*.pc $INSTALL_DIR/lib/*.la
+
+    if [[ $SOLARIS ]]; then
+        pushd xmlrpc-c-advanced-$XMLRPC_REV
+        for xmlpatch in $SRC_DIR/patches/xmlrpc-solaris-*.patch ; do
+            test !  -e "$xmlpatch" || { bold "$(basename $xmlpatch)"; patch -uNp1 -i "$xmlpatch"; }
+        done
+        popd
+
+        bold "Solaris: Installing ncurses-$NCURSES_VERSION"
+        #ncurses_configure=(  --enable-widec --with-shared --enable-symlinks  --with-cxx-shared --enable-ext-colors --enable-tcap-names --enable-sp-funcs --enable-pc-files  --without-ada --with-gnu-ld --with-pkg-config --enable-rpath --without-tests  --without-manpages --with-pkg-config-libdir=$INSTALL_DIR/lib/pkgconfig --prefix=$INSTALL_DIR )
+        #ncurses_configure=( --with-shared --without-profile --without-debug --disable-rpath --enable-echo --disable-stripping --enable-const --enable-pc-files --with-pkg-config-libdir=$INSTALL_DIR/lib/pkgconfig --without-ada --without-tests --without-progs --with-gpm --enable-symlinks --disable-lp64 --with-chtype='long' --with-nmask-t='long' --disable-termcap --with-default-terminfo-dir=/usr/gnu/share/terminfo --with-ticlib=tic --with-termlib=tinfo --with-versioned-syms --with-xterm-kbs=del )
+        #ncurses_configure=( --with-shared --without-profile --without-debug --disable-rpath --enable-echo --disable-stripping --enable-const --enable-pc-files --with-pkg-config-libdir=$INSTALL_DIR/lib/pkgconfig --without-ada --without-tests --without-progs --with-gpm --enable-symlinks --disable-lp64 --with-chtype='long' --with-nmask-t='long' --disable-termcap --with-default-terminfo-dir=/usr/gnu/share/terminfo --with-ticlib=tic --with-termlib --with-versioned-syms --with-xterm-kbs=del )
+        #ncurses_configure=( --with-shared --without-profile --without-debug --disable-rpath --enable-echo --disable-stripping --enable-const --enable-pc-files --with-pkg-config-libdir=$INSTALL_DIR/lib/pkgconfig --without-ada --without-tests --without-progs --with-gpm --enable-symlinks --disable-lp64 --with-chtype='long' --with-nmask-t='long' --disable-termcap --with-default-terminfo-dir=/usr/gnu/share/terminfo --with-ticlib --with-termlib --with-versioned-syms --with-xterm-kbs=del )
+        #ncurses_configure=( --with-shared --without-profile --without-debug --disable-rpath --enable-echo --disable-stripping --enable-const --enable-pc-files --with-pkg-config-libdir=$INSTALL_DIR/lib/pkgconfig --without-ada --without-tests --without-progs --with-gpm --enable-symlinks --disable-lp64 --with-chtype='long' --with-nmask-t='long' --disable-termcap --with-default-terminfo-dir=/usr/gnu/share/terminfo --with-ticlib --with-termlib --with-xterm-kbs=del )
+        ncurses_configure=( --enable-widec --without-manpages --with-shared --without-profile --without-debug --disable-rpath --enable-echo --disable-stripping --enable-const --enable-pc-files --with-pkg-config-libdir=$INSTALL_DIR/lib/pkgconfig --without-ada --without-tests --without-progs --with-gpm --enable-symlinks --disable-lp64 --with-chtype='long' --with-nmask-t='long' --disable-termcap --with-default-terminfo-dir=/usr/gnu/share/terminfo --with-ticlib=tic --with-termlib=tinfo --with-xterm-kbs=del )
+        ( cd ncurses-$NCURSES_VERSION && AR=/usr/bin/ar ./configure "${ncurses_configure[@]}" --prefix="$INSTALL_DIR" \
+            && $MAKE $MAKE_OPTS && $MAKE install \
+            || fail "Cannot build or install 'ncurses'!" )
+    fi
 
     ( cd xmlrpc-c-advanced-$XMLRPC_REV \
         && $SED_I s:PGROGRAMDESTDIR:PROGRAMDESTDIR: common.mk \
@@ -471,12 +518,12 @@ core_unpack() { # Unpack original LT/RT source
 build() { ## Build and install all components
     test -f "$INSTALL_DIR/lib/DEPS-DONE" || fail "You need to '$0 deps' first!"
 
-    ( set +x ; $USE_CXXFLAGS || unset CXXFLAGS; cd libtorrent-$LT_VERSION && automagic && \
-        ./configure $CFG_OPTS $CFG_OPTS_LT && $MAKE clean && $MAKE $MAKE_OPTS && $MAKE prefix=$INSTALL_DIR install )
-    $SED_I s:/usr/local:$INSTALL_DIR: $INSTALL_DIR/lib/pkgconfig/*.pc $INSTALL_DIR/lib/*.la
-    ( set +x ; $USE_CXXFLAGS || unset CXXFLAGS; cd rtorrent-$RT_VERSION && automagic && \
+    #( set +x ; $USE_CXXFLAGS || unset CXXFLAGS; cd libtorrent-$LT_VERSION && automagic && \
+    #    ./configure $CFG_OPTS $CFG_OPTS_LT && $MAKE clean && $MAKE $MAKE_OPTS && $MAKE prefix=$INSTALL_DIR install )
+    #$SED_I s:/usr/local:$INSTALL_DIR: $INSTALL_DIR/lib/pkgconfig/*.pc $INSTALL_DIR/lib/*.la
+    export LIBS="-ltinfo" ; ( set +x ; $USE_CXXFLAGS || unset CXXFLAGS; cd rtorrent-$RT_VERSION && automagic && \
         ./configure $CFG_OPTS $CFG_OPTS_RT --with-xmlrpc-c=$INSTALL_DIR/bin/xmlrpc-c-config && \
-        $MAKE clean && $MAKE $MAKE_OPTS && $MAKE prefix=$INSTALL_DIR install )
+        $MAKE clean && { [[ $SOLARIS && -d gnulib ]] && ( cd gnulib && $MAKE ) || true ; } && $MAKE $MAKE_OPTS && $MAKE prefix=$INSTALL_DIR install )
 }
 
 build_git() { ## a/k/a ‹git› – Build and install libtorrent and rtorrent from git checkouts
@@ -532,6 +579,7 @@ extend() { ## Rebuild and install libtorrent and rTorrent with patches applied
     # Patch rTorrent
     pushd rtorrent-$RT_VERSION
 
+    #for corepatch in $SRC_DIR/patches/ps-*_{${RT_VERSION},all}.patch ; do
     for corepatch in $SRC_DIR/patches/ps-*_{${RT_VERSION},all}.patch "${RT_PATCHES[@]}"; do
         test ! -e "$corepatch" || { bold "$(basename $corepatch)"; patch -uNp1 -i "$corepatch"; }
     done
@@ -550,6 +598,10 @@ extend() { ## Rebuild and install libtorrent and rTorrent with patches applied
     patch -uNp1 -i "${SRC_DIR}/patches/ui_pyroscope.patch"
 
     $SED_I 's/rTorrent \" VERSION/rTorrent'"$VERSION_EXTRAS"' " VERSION/' src/ui/download_list.cc
+
+    # Copy in GNULib files to provide portable version of random_r and initstate_r
+    [[ $SOLARIS ]] && tar xzf "$SRC_DIR/patches/rtorrent-ps.gnulib.patch.tgz"
+
     popd
     bold "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 
